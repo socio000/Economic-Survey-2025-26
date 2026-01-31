@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Economic Survey of India: Interactive Summary</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Chosen Palette: Warm Professional -->
+    <!-- 
+        Background: #FDFBF7 (Warm Cream)
+        Text: #1F2937 (Charcoal)
+        Primary: #C05621 (Terracotta/Burnt Orange - Focus)
+        Secondary: #2C7A7B (Teal - Data)
+        Accent: #D69E2E (Soft Gold - Highlights)
+    -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'es-bg': '#FDFBF7',
+                        'es-text': '#1F2937',
+                        'es-primary': '#C05621',
+                        'es-secondary': '#2C7A7B',
+                        'es-accent': '#D69E2E',
+                        'es-card': '#FFFFFF',
+                        'es-sidebar': '#2D3748',
+                    },
+                    fontFamily: {
+                        sans: ['Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Application Structure Plan: 
+         1. Layout: Fixed Sidebar (Desktop) / Hamburger (Mobile) + Scrollable Main Content.
+            - Why: The Economic Survey contains massive amounts of text and data. A dashboard layout allows users to "jump" to specific chapters (Fiscal, Agri, External) without scrolling through a 15,000-word wall of text.
+         2. Content Modules:
+            - Overview: Macro snapshots (GDP, Deficit) - Immediate "State of Economy" view.
+            - Thematic Tabs: Users switch between 'Fiscal', 'Monetary', 'Sectors', 'Social'.
+            - UPSC Corner: Dedicated tab for definitions, keywords, and exam-specific notes.
+            - Schemes Tracker: Searchable grid for government schemes.
+         3. Interactions:
+            - Tab Switching: DOM manipulation to show/hide sections.
+            - Chart Filtering: Toggle between 'Yearly' and 'Quarterly' or different metrics.
+            - Details Expansion: Accordions for deep-dive text to keep the UI clean.
+    -->
+
+    <!-- Visualization & Content Choices:
+         1. Macro Trends -> Goal: Change/Compare -> Viz: Combined Bar/Line Chart (Chart.js) -> Interaction: Hover for exact figures -> Justification: Shows growth rates vs absolute numbers effectively.
+         2. Sectoral Share -> Goal: Inform/Proportion -> Viz: Doughnut Chart -> Interaction: Click segment to filter text details -> Justification: Classic view of GVA composition.
+         3. Inflation Dynamics -> Goal: Compare -> Viz: Multi-line chart (CPI vs WPI) -> Justification: Critical for understanding the divergence narrative.
+         4. Schemes -> Goal: Organize/Inform -> Viz: Filterable HTML Grid -> Interaction: Search bar -> Justification: Easy lookup for UPSC aspirants.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. Charts via Chart.js Canvas. Icons via Unicode/CSS shapes. -->
+
+    <style>
+        /* Custom Scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e0; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0; 
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%; /* Adapts to grid column */
+            height: 350px;
+            max-height: 400px;
+        }
+        
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 250px;
+            }
+        }
+
+        .nav-item.active {
+            background-color: #C05621;
+            color: white;
+            border-left: 4px solid #D69E2E;
+        }
+
+        .card-hover {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="bg-es-bg text-es-text font-sans h-screen flex overflow-hidden">
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 bg-es-sidebar text-gray-300 flex-shrink-0 hidden md:flex flex-col shadow-xl z-20">
+        <div class="p-6 border-b border-gray-700">
+            <h1 class="text-2xl font-bold text-white tracking-wide">Economic Survey</h1>
+            <p class="text-xs text-es-accent mt-1 uppercase tracking-wider">Interactive Summary</p>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-4">
+            <ul class="space-y-1">
+                <li><button onclick="showSection('overview')" class="nav-item active w-full text-left px-6 py-3 hover:bg-gray-700 transition-colors flex items-center gap-3"><span>&#128200;</span> State of Economy</button></li>
+                <li><button onclick="showSection('fiscal')" class="nav-item w-full text-left px-6 py-3 hover:bg-gray-700 transition-colors flex items-center gap-3"><span>&#128176;</span> Fiscal Policy</button></li>
+                <li><button onclick="showSection('prices')" class="nav-item w-full text-left px-6 py-3 hover:bg-gray-700 transition-colors flex items-center gap-3"><span>&#127991;</span> Inflation & Prices</button></li>
+                <li><button onclick="showSection('sectors')" class="nav-item w-full text-left px-6 py-3 hover:bg-gray-700 transition-colors flex items-center gap-3"><span>&#127981;</span> Key Sectors</button></li>
+                <li><button onclick="showSection('social')" class="nav-item w-full text-left px-6 py-3 hover:bg-gray-700 transition-colors flex items-center gap-3"><span>&#128101;</span> Social Infrastructure</button></li>
+                <li><button onclick="showSection('schemes')" class="nav-item w-full text-left px-6 py-3 hover:bg-gray-700 transition-colors flex items-center gap-3"><span>&#128221;</span> Schemes Tracker</button></li>
+                <li><button onclick="showSection('upsc')" class="nav-item w-full text-left px-6 py-3 hover:bg-gray-700 transition-colors flex items-center gap-3 border-t border-gray-600 mt-2 pt-4"><span class="text-es-accent">★</span> UPSC Notes</button></li>
+            </ul>
+        </nav>
+        <div class="p-4 bg-gray-900 text-xs text-center text-gray-500">
+            Data Source: Economic Survey of India
+        </div>
+    </aside>
+
+    <!-- Mobile Header -->
+    <div class="md:hidden fixed top-0 w-full bg-es-sidebar text-white z-50 flex justify-between items-center p-4 shadow-md">
+        <h1 class="font-bold">Economic Survey</h1>
+        <button id="mobileMenuBtn" class="text-2xl">&#9776;</button>
+    </div>
+
+    <!-- Mobile Menu Overlay -->
+    <div id="mobileMenu" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-40 hidden flex-col justify-center items-center space-y-6 text-white text-xl">
+        <button onclick="showSection('overview'); toggleMobileMenu()" class="hover:text-es-accent">State of Economy</button>
+        <button onclick="showSection('fiscal'); toggleMobileMenu()" class="hover:text-es-accent">Fiscal Policy</button>
+        <button onclick="showSection('prices'); toggleMobileMenu()" class="hover:text-es-accent">Inflation</button>
+        <button onclick="showSection('sectors'); toggleMobileMenu()" class="hover:text-es-accent">Sectors</button>
+        <button onclick="showSection('schemes'); toggleMobileMenu()" class="hover:text-es-accent">Schemes</button>
+        <button onclick="showSection('upsc'); toggleMobileMenu()" class="text-es-accent">UPSC Notes</button>
+        <button onclick="toggleMobileMenu()" class="absolute top-4 right-4 text-3xl">&times;</button>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto pt-16 md:pt-0 bg-gray-50 relative">
+        
+        <!-- SECTION: OVERVIEW (State of Economy) -->
+        <section id="overview" class="p-6 md:p-10 max-w-7xl mx-auto space-y-8 animate-fade-in">
+            <header class="mb-8 border-b-2 border-gray-200 pb-4">
+                <h2 class="text-3xl font-bold text-gray-800">State of the Economy</h2>
+                <p class="text-gray-600 mt-2 text-lg">
+                    <span class="font-semibold text-es-primary">Objective:</span> 
+                    Analyzing the resilience of the Indian economy amidst global volatility. This section summarizes GDP growth trajectories, key macroeconomic indicators, and the strategic outlook.
+                </p>
+            </header>
+
+            <!-- Key Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-es-primary card-hover">
+                    <div class="text-sm text-gray-500 uppercase font-bold">Real GDP Growth</div>
+                    <div class="text-3xl font-bold text-gray-800 mt-1">7.2%</div>
+                    <div class="text-xs text-green-600 mt-2">▲ Resilient Domestic Demand</div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-es-secondary card-hover">
+                    <div class="text-sm text-gray-500 uppercase font-bold">Fiscal Deficit</div>
+                    <div class="text-3xl font-bold text-gray-800 mt-1">5.9%</div>
+                    <div class="text-xs text-gray-500 mt-2">Targeted consolidation</div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-es-accent card-hover">
+                    <div class="text-sm text-gray-500 uppercase font-bold">Forex Reserves</div>
+                    <div class="text-3xl font-bold text-gray-800 mt-1">$600B+</div>
+                    <div class="text-xs text-green-600 mt-2">▲ External Buffer</div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-gray-500 card-hover">
+                    <div class="text-sm text-gray-500 uppercase font-bold">CPI Inflation</div>
+                    <div class="text-3xl font-bold text-gray-800 mt-1">5.4%</div>
+                    <div class="text-xs text-blue-600 mt-2">▼ Within Tolerance Band</div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- GDP Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-xl font-bold mb-4 flex justify-between items-center">
+                        GDP Growth Trend
+                        <select id="gdpFilter" class="text-sm border rounded px-2 py-1 font-normal bg-gray-50">
+                            <option value="yearly">Yearly</option>
+                            <option value="quarterly">Recent Quarters</option>
+                        </select>
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="gdpChart"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-4 italic">
+                        The Indian economy has demonstrated resilience, recovering from pandemic shocks to post strong growth driven by private consumption and capital formation.
+                    </p>
+                </div>
+
+                <!-- Sectoral Contribution -->
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-xl font-bold mb-4">GVA Composition (Current Prices)</h3>
+                    <div class="chart-container">
+                        <canvas id="sectorChart"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-4 italic">
+                        Services continues to be the primary driver, but the Industrial sector has seen a resurgence due to PLI schemes and Capex push.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Detailed Analysis Text -->
+            <div class="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+                <h3 class="text-xl font-bold text-es-primary mb-4">Macroeconomic Outlook</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-700 leading-relaxed">
+                    <div>
+                        <h4 class="font-bold text-gray-900 mb-2">Drivers of Growth</h4>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><strong class="text-es-secondary">Private Consumption:</strong> Rebounded significantly, acting as the main pillar of growth.</li>
+                            <li><strong class="text-es-secondary">Capital Expenditure (Capex):</strong> Central Government's capex increased by 63.4% in the first eight months of FY24 compared to the same period in the previous year.</li>
+                            <li><strong class="text-es-secondary">Housing Market:</strong> Sales have picked up, reducing inventory overhang and spurring construction activity.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 mb-2">Key Challenges</h4>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><strong class="text-red-600">Geopolitical Tensions:</strong> Supply chain disruptions and volatile energy prices remain a risk.</li>
+                            <li><strong class="text-red-600">Global Slowdown:</strong> Weak external demand affects merchandise export growth.</li>
+                            <li><strong class="text-red-600">El Niño Conditions:</strong> Impact on agricultural output and food inflation remains a monitorable.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: FISCAL POLICY -->
+        <section id="fiscal" class="hidden p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+            <header class="mb-8 border-b-2 border-gray-200 pb-4">
+                <h2 class="text-3xl font-bold text-gray-800">Fiscal Developments</h2>
+                <p class="text-gray-600 mt-2 text-lg">
+                    <span class="font-semibold text-es-primary">Context:</span> 
+                    Reviewing the government's revenue and expenditure strategies. Focus is on the shift from revenue expenditure to capital expenditure to spur long-term growth.
+                </p>
+            </header>
+
+            <div class="bg-es-bg border-l-4 border-es-secondary p-4 mb-6 rounded-r">
+                <h4 class="font-bold text-es-secondary">UPSC Key Concept: Quality of Expenditure</h4>
+                <p class="text-sm text-gray-700">The government is prioritizing <strong>Capital Expenditure (Capex)</strong> over Revenue Expenditure. Capex creates assets (roads, bridges) with a higher multiplier effect (approx 2.5x) compared to revenue expenditure (approx 0.9x), leading to sustained economic growth.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-xl font-bold mb-4">Deficit Trends (% of GDP)</h3>
+                    <div class="chart-container">
+                        <canvas id="fiscalChart"></canvas>
+                    </div>
+                </div>
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm h-full flex flex-col justify-center">
+                        <h3 class="font-bold text-gray-800 mb-3 text-lg border-b pb-2">Revenue Buoyancy</h3>
+                        <p class="text-gray-600 mb-4">GST collections have stabilized at a high monthly average (₹1.66 lakh crore), indicating robust economic activity and improved compliance.</p>
+                        <ul class="space-y-2 text-sm">
+                            <li class="flex justify-between"><span>Gross Tax Revenue</span> <span class="font-bold text-green-600">▲ 13% YoY</span></li>
+                            <li class="flex justify-between"><span>Direct Tax</span> <span class="font-bold text-green-600">▲ Strong</span></li>
+                            <li class="flex justify-between"><span>GST Monthly Avg</span> <span class="font-bold">₹1.66 Lakh Cr</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: INFLATION & PRICES -->
+        <section id="prices" class="hidden p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+            <header class="mb-8 border-b-2 border-gray-200 pb-4">
+                <h2 class="text-3xl font-bold text-gray-800">Prices & Inflation</h2>
+                <p class="text-gray-600 mt-2 text-lg">
+                    <span class="font-semibold text-es-primary">Overview:</span> 
+                    Analysis of CPI (Consumer Price Index) and WPI (Wholesale Price Index) trends. Managing the "imported inflation" vs "domestic supply shock" dynamic.
+                </p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-xl font-bold mb-4">CPI vs WPI Divergence</h3>
+                    <div class="chart-container">
+                        <canvas id="inflationChart"></canvas>
+                    </div>
+                    <div class="mt-4 p-3 bg-yellow-50 rounded text-sm border border-yellow-200">
+                        <strong>Insight:</strong> WPI has been in negative territory recently due to falling commodity prices, while CPI remains slightly elevated due to food prices.
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h3 class="font-bold text-lg text-es-primary mb-3">Drivers of Inflation</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="font-semibold text-gray-800 text-sm">1. Food Inflation</h4>
+                                <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
+                                    <div class="bg-red-500 h-2 rounded-full" style="width: 75%"></div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">High contribution from Vegetables & Pulses due to erratic weather.</p>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-800 text-sm">2. Core Inflation (Excluding Food & Fuel)</h4>
+                                <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
+                                    <div class="bg-green-500 h-2 rounded-full" style="width: 40%"></div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Has moderated significantly, indicating weak pass-through of costs.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h3 class="font-bold text-lg text-es-secondary mb-3">Policy Measures</h3>
+                        <ul class="list-disc pl-5 space-y-2 text-sm text-gray-700">
+                            <li><strong>Open Market Sale Scheme (OMSS):</strong> Used to offload wheat/rice to cool prices.</li>
+                            <li><strong>Export Bans:</strong> Restrictions on Non-Basmati white rice, sugar, and onions to ensure domestic availability.</li>
+                            <li><strong>Monetary Policy:</strong> Repo rate maintained to anchor inflation expectations.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: SECTORS -->
+        <section id="sectors" class="hidden p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+            <header class="mb-8 border-b-2 border-gray-200 pb-4">
+                <h2 class="text-3xl font-bold text-gray-800">Sectoral Developments</h2>
+                <div class="flex gap-4 mt-4 overflow-x-auto pb-2">
+                    <button onclick="filterSector('agri')" class="sector-tab bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-bold hover:bg-green-200 active-sector">Agriculture</button>
+                    <button onclick="filterSector('ind')" class="sector-tab bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-bold hover:bg-blue-200">Industry</button>
+                    <button onclick="filterSector('serv')" class="sector-tab bg-purple-100 text-purple-800 px-4 py-2 rounded-full text-sm font-bold hover:bg-purple-200">Services</button>
+                </div>
+            </header>
+
+            <!-- Agriculture Content -->
+            <div id="sector-agri" class="sector-content grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-2xl font-bold text-green-800 mb-4">Agriculture & Allied Sectors</h3>
+                    <p class="text-gray-700 mb-4">Agriculture continues to be the primary source of livelihood for about 55% of the population. The sector grew at an average annual rate of 4.6% during the last six years.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="p-4 border rounded bg-green-50">
+                            <h4 class="font-bold text-green-900">Foodgrain Production</h4>
+                            <p class="text-3xl font-bold text-green-700">329.7 MT</p>
+                            <p class="text-xs text-gray-600">Record production estimates.</p>
+                        </div>
+                        <div class="p-4 border rounded bg-green-50">
+                            <h4 class="font-bold text-green-900">Credit Flow</h4>
+                            <p class="text-3xl font-bold text-green-700">₹20 Lakh Cr</p>
+                            <p class="text-xs text-gray-600">Target for Agri-credit.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h4 class="font-bold text-gray-800 mb-3">Key Schemes</h4>
+                    <ul class="space-y-3 text-sm">
+                        <li class="border-b pb-2">
+                            <span class="font-bold block text-green-700">PM-KISAN</span>
+                            Direct income support of ₹6,000/year to farmers.
+                        </li>
+                        <li class="border-b pb-2">
+                            <span class="font-bold block text-green-700">AIF (Agri Infra Fund)</span>
+                            Financing for post-harvest management infrastructure.
+                        </li>
+                        <li>
+                            <span class="font-bold block text-green-700">PM Fasal Bima Yojana</span>
+                            Crop insurance coverage.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Industry Content -->
+            <div id="sector-ind" class="sector-content hidden grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-2xl font-bold text-blue-800 mb-4">Industry & Manufacturing</h3>
+                    <p class="text-gray-700 mb-4">Driven by the "Make in India" push and PLI schemes. The Index of Industrial Production (IIP) has shown robust growth, specifically in infrastructure and construction goods.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="p-4 border rounded bg-blue-50">
+                            <h4 class="font-bold text-blue-900">PM GatiShakti</h4>
+                            <p class="text-sm text-gray-700 mt-2">National Master Plan for multi-modal connectivity to reduce logistics costs.</p>
+                        </div>
+                        <div class="p-4 border rounded bg-blue-50">
+                            <h4 class="font-bold text-blue-900">MSME Support</h4>
+                            <p class="text-sm text-gray-700 mt-2">Extension of ECLGS (Emergency Credit Line) helped MSMEs recover from pandemic shock.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h4 class="font-bold text-gray-800 mb-3">PLI Scheme Impact</h4>
+                    <p class="text-sm text-gray-600 mb-4">Production Linked Incentive schemes across 14 sectors (Electronics, Pharma, Auto) are attracting massive capex.</p>
+                    <div class="bg-blue-600 text-white p-3 rounded text-center">
+                        <span class="block text-2xl font-bold">₹1.07 Lakh Cr</span>
+                        <span class="text-xs">Actual Investment Realized</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Services Content -->
+            <div id="sector-serv" class="sector-content hidden grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-2xl font-bold text-purple-800 mb-4">Services Sector</h3>
+                    <p class="text-gray-700 mb-4">The powerhouse of the Indian economy. Contact-intensive services (Hospitality, Tourism) have fully recovered. Software exports remain resilient despite global headwinds.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="p-4 border rounded bg-purple-50">
+                            <h4 class="font-bold text-purple-900">PMI Services</h4>
+                            <p class="text-3xl font-bold text-purple-700">58.0+</p>
+                            <p class="text-xs text-gray-600">Consistently in expansion zone (>50) for 24+ months.</p>
+                        </div>
+                        <div class="p-4 border rounded bg-purple-50">
+                            <h4 class="font-bold text-purple-900">Digital Infra</h4>
+                            <p class="text-sm text-gray-700 mt-2">UPI transactions hitting record highs (10 Billion+ monthly), showcasing digital adoption.</p>
+                        </div>
+                    </div>
+                </div>
+                 <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h4 class="font-bold text-gray-800 mb-3">Global Capability Centers (GCCs)</h4>
+                    <p class="text-sm text-gray-600">India is becoming the GCC hub of the world, moving from back-office support to high-value R&D and innovation centers.</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- SECTION: SOCIAL INFRASTRUCTURE -->
+        <section id="social" class="hidden p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+            <header class="mb-8 border-b-2 border-gray-200 pb-4">
+                <h2 class="text-3xl font-bold text-gray-800">Social Infrastructure & Employment</h2>
+                <p class="text-gray-600 mt-2 text-lg">Focus on health, education, and skill development. Reviewing the demographic dividend and quality of life indicators.</p>
+            </header>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="font-bold text-xl mb-4 text-es-primary">Key Indicators</h3>
+                    <ul class="space-y-4">
+                        <li class="flex items-start">
+                            <span class="text-2xl mr-3">🏥</span>
+                            <div>
+                                <h4 class="font-bold">Public Health Exp</h4>
+                                <p class="text-sm text-gray-600">Increased to 2.1% of GDP (FY23 RE) from 1.6% (FY21).</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-2xl mr-3">🎓</span>
+                            <div>
+                                <h4 class="font-bold">GER in Higher Ed</h4>
+                                <p class="text-sm text-gray-600">Gross Enrolment Ratio improved to 28.4%.</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-2xl mr-3">👩‍💻</span>
+                            <div>
+                                <h4 class="font-bold">Female LFPR</h4>
+                                <p class="text-sm text-gray-600">Labor Force Participation Rate rose to 37.0% (2022-23), a significant structural shift.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                 <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="font-bold text-xl mb-4">Digital Public Infrastructure (DPI)</h3>
+                    <p class="text-gray-700 mb-4 text-sm">India's "India Stack" (Aadhaar, UPI, DigiLocker) is revolutionizing social delivery.</p>
+                    <div class="bg-gray-100 p-4 rounded text-sm">
+                        <p><strong>Impact:</strong> Direct Benefit Transfer (DBT) has saved over ₹2.7 lakh crore by removing leakages and fake beneficiaries.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: SCHEMES TRACKER -->
+        <section id="schemes" class="hidden p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+            <header class="mb-8 border-b-2 border-gray-200 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center">
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-800">Govt Schemes Tracker</h2>
+                    <p class="text-gray-600 mt-2">Status and updates on major flagship programs.</p>
+                </div>
+                <input type="text" id="schemeSearch" onkeyup="filterSchemes()" placeholder="Search schemes..." class="mt-4 md:mt-0 p-2 border rounded shadow-sm w-full md:w-64">
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="schemeGrid">
+                <!-- Scheme Cards will be injected by JS -->
+            </div>
+        </section>
+
+        <!-- SECTION: UPSC NOTES -->
+        <section id="upsc" class="hidden p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+            <header class="mb-8 border-b-2 border-gray-200 pb-4">
+                <h2 class="text-3xl font-bold text-es-primary">UPSC Corner</h2>
+                <p class="text-gray-600 mt-2">Curated notes for Prelims and Mains preparation.</p>
+            </header>
+
+            <div class="flex gap-4 mb-6">
+                <button onclick="toggleUpscTab('prelims')" class="upsc-tab active bg-es-primary text-white px-6 py-2 rounded shadow">Prelims Facts</button>
+                <button onclick="toggleUpscTab('mains')" class="upsc-tab bg-white text-es-primary border border-es-primary px-6 py-2 rounded shadow hover:bg-orange-50">Mains Analysis</button>
+                <button onclick="toggleUpscTab('terms')" class="upsc-tab bg-white text-es-primary border border-es-primary px-6 py-2 rounded shadow hover:bg-orange-50">Key Terms</button>
+            </div>
+
+            <div id="upsc-prelims" class="upsc-content block space-y-4">
+                <!-- Content injected via JS -->
+            </div>
+            <div id="upsc-mains" class="upsc-content hidden space-y-6">
+                 <!-- Content injected via JS -->
+            </div>
+             <div id="upsc-terms" class="upsc-content hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <!-- Content injected via JS -->
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // === STATE & DATA ===
+        const schemeData = [
+            { name: "PM Vishwakarma", sector: "MSME/Social", status: "New", desc: "Support for traditional artisans and craftspeople via low-interest loans and skilling." },
+            { name: "PLI Scheme", sector: "Industry", status: "Active", desc: "Incentives for 14 sectors to boost domestic manufacturing and exports." },
+            { name: "PM GatiShakti", sector: "Infra", status: "Active", desc: "Digital platform to coordinate infrastructure projects across 16 ministries." },
+            { name: "Green Hydrogen Mission", sector: "Energy", status: "Active", desc: "Target to produce 5 MMT of Green Hydrogen by 2030." },
+            { name: "PM PRANAM", sector: "Agri", status: "Proposed", desc: "To incentivize states to promote alternative fertilizers and balanced use of chemical fertilizers." },
+            { name: "MISHTI", sector: "Environment", status: "Active", desc: "Mangrove Initiative for Shoreline Habitats & Tangible Incomes." },
+            { name: "Amrit Dharohar", sector: "Environment", status: "Active", desc: "Conservation of Ramsar sites (wetlands) through community participation." },
+            { name: "Mahila Samman Bachat Patra", sector: "Finance", status: "New", desc: "Small savings scheme for women/girls with 7.5% interest." }
+        ];
+
+        const upscData = {
+            prelims: [
+                "<strong>Fiscal Deficit Target:</strong> 5.9% for FY24, glide path to 4.5% by FY26.",
+                "<strong>Top Export:</strong> Petroleum Products, followed by Gems & Jewellery.",
+                "<strong>Top Import Source:</strong> China, followed by UAE and USA.",
+                "<strong>Forex Reserves:</strong> Comfortable cover for 10+ months of imports.",
+                "<strong>Net Zero Target:</strong> India aims for Net Zero emissions by 2070 (Panchamrit)."
+            ],
+            mains: [
+                { title: "Capital Expenditure Led Growth", body: "The government strategy relies on 'Crowding-in' private investment. By heavily investing in infrastructure (Roads, Railways), the govt reduces logistics costs, making private manufacturing more competitive. Unlike consumption-led stimulus, this avoids high inflation." },
+                { title: "Digital Public Infrastructure (DPI)", body: "DPI is seen as a factor of production in the 21st century. It democratizes access to credit (OCEN), commerce (ONDC), and identity (Aadhaar). For Mains, link DPI to 'Inclusive Growth' and 'Formalization of Economy'." },
+                { title: "Feminization of Agriculture", body: "With men migrating to cities for work, women are increasingly managing farm operations. Survey highlights the need for gender-specific equipment and credit access." }
+            ],
+            terms: [
+                { term: "Twin Balance Sheet Problem", def: "A situation where both banks (bad loans) and corporates (high debt) are under stress. Survey notes this has now turned into a 'Twin Balance Sheet Advantage' as balance sheets have been repaired." },
+                { term: "Bond Yields", def: "The return an investor realizes on a bond. High yields often indicate higher government borrowing costs or inflation expectations." },
+                { term: "Real vs Nominal GDP", def: "Real GDP is adjusted for inflation (Base year 2011-12 prices), while Nominal is at current market prices." },
+                { term: "Tax Buoyancy", def: "Responsiveness of tax revenue growth to changes in GDP. Buoyancy > 1 means tax revenue is growing faster than the economy." }
+            ]
+        };
+
+        // === CHARTS ===
+        let charts = {};
+
+        function initCharts() {
+            // Chart globals
+            Chart.defaults.font.family = "'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif";
+            Chart.defaults.color = '#4A5568';
+
+            // 1. GDP Chart
+            const ctxGdp = document.getElementById('gdpChart').getContext('2d');
+            charts.gdp = new Chart(ctxGdp, {
+                type: 'bar',
+                data: {
+                    labels: ['FY19', 'FY20', 'FY21', 'FY22', 'FY23', 'FY24(E)'],
+                    datasets: [{
+                        label: 'GDP Growth Rate (%)',
+                        data: [6.5, 3.7, -6.6, 8.7, 7.2, 7.3],
+                        backgroundColor: (context) => {
+                            const val = context.raw;
+                            return val < 0 ? '#E53E3E' : '#C05621'; // Red for negative
+                        },
+                        borderRadius: 4
+                    }, {
+                        type: 'line',
+                        label: 'Trend',
+                        data: [6.5, 3.7, -6.6, 8.7, 7.2, 7.3],
+                        borderColor: '#2D3748',
+                        borderWidth: 2,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: false, grid: { borderDash: [2, 4] } } }
+                }
+            });
+
+            // 2. Sector Chart
+            const ctxSector = document.getElementById('sectorChart').getContext('2d');
+            charts.sector = new Chart(ctxSector, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Agriculture', 'Industry', 'Services'],
+                    datasets: [{
+                        data: [18, 28, 54],
+                        backgroundColor: ['#48BB78', '#4299E1', '#9F7AEA'],
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            // 3. Fiscal Chart
+            const ctxFiscal = document.getElementById('fiscalChart').getContext('2d');
+            charts.fiscal = new Chart(ctxFiscal, {
+                type: 'line',
+                data: {
+                    labels: ['FY21', 'FY22', 'FY23', 'FY24(BE)', 'FY25(Target)'],
+                    datasets: [{
+                        label: 'Fiscal Deficit (% of GDP)',
+                        data: [9.2, 6.7, 6.4, 5.9, 5.1],
+                        borderColor: '#C05621',
+                        backgroundColor: 'rgba(192, 86, 33, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: false, min: 3 } }
+                }
+            });
+
+            // 4. Inflation Chart
+            const ctxInf = document.getElementById('inflationChart').getContext('2d');
+            charts.inflation = new Chart(ctxInf, {
+                type: 'line',
+                data: {
+                    labels: ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'CPI (Retail)',
+                        data: [4.7, 4.3, 4.8, 7.4, 6.8, 5.0, 4.9, 5.5, 5.7],
+                        borderColor: '#2C5282',
+                        borderWidth: 2
+                    }, {
+                        label: 'WPI (Wholesale)',
+                        data: [-0.9, -3.5, -4.1, -1.3, 0.5, -0.2, 0.5, 0.3, 0.7],
+                        borderColor: '#E53E3E',
+                        borderWidth: 2,
+                        borderDash: [5, 5]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        annotation: { 
+                            annotations: { line1: { type: 'line', yMin: 0, yMax: 0, borderColor: 'black', borderWidth: 1 } } 
+                        } 
+                    }
+                }
+            });
+        }
+
+        // === DOM MANIPULATION ===
+        
+        function showSection(sectionId) {
+            // Hide all sections
+            document.querySelectorAll('main section').forEach(el => el.classList.add('hidden'));
+            // Show target
+            const target = document.getElementById(sectionId);
+            if(target) target.classList.remove('hidden');
+
+            // Update Nav Active State
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            // Find the button that calls this function (rough approximation for simple nav)
+            const navBtns = document.querySelectorAll(`button[onclick="showSection('${sectionId}')"]`);
+            if(navBtns.length > 0) navBtns.forEach(btn => {
+                if(btn.classList.contains('nav-item')) btn.classList.add('active');
+            });
+
+            // Trigger chart resize if entering section
+            if (sectionId === 'overview' || sectionId === 'fiscal' || sectionId === 'prices') {
+                setTimeout(() => {
+                    Object.values(charts).forEach(chart => chart.resize());
+                }, 100);
+            }
+        }
+
+        function filterSector(sector) {
+            // Hide all sector contents
+            document.querySelectorAll('.sector-content').forEach(el => el.classList.add('hidden'));
+            // Remove active class from tabs
+            document.querySelectorAll('.sector-tab').forEach(el => el.classList.remove('ring-2', 'ring-offset-2', 'ring-gray-400'));
+            
+            // Show selected
+            document.getElementById(`sector-${sector}`).classList.remove('hidden');
+            
+            // Add active visual
+            const btn = document.querySelector(`button[onclick="filterSector('${sector}')"]`);
+            if(btn) btn.classList.add('ring-2', 'ring-offset-2', 'ring-gray-400');
+        }
+
+        function renderSchemes() {
+            const grid = document.getElementById('schemeGrid');
+            grid.innerHTML = schemeData.map(s => `
+                <div class="scheme-card bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded uppercase font-bold tracking-wider">${s.sector}</span>
+                        <span class="text-xs font-bold ${s.status === 'New' ? 'text-blue-600' : 'text-green-600'}">${s.status}</span>
+                    </div>
+                    <h3 class="font-bold text-lg text-gray-800 mb-2">${s.name}</h3>
+                    <p class="text-sm text-gray-600">${s.desc}</p>
+                </div>
+            `).join('');
+        }
+
+        function filterSchemes() {
+            const query = document.getElementById('schemeSearch').value.toLowerCase();
+            const cards = document.querySelectorAll('.scheme-card');
+            cards.forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        }
+
+        function renderUpsc() {
+            // Prelims
+            document.getElementById('upsc-prelims').innerHTML = upscData.prelims.map(p => 
+                `<div class="bg-white p-4 rounded border-l-4 border-es-primary shadow-sm"><p class="text-gray-800">${p}</p></div>`
+            ).join('');
+
+            // Mains
+            document.getElementById('upsc-mains').innerHTML = upscData.mains.map(m => 
+                `<div class="bg-white p-6 rounded shadow-sm">
+                    <h4 class="font-bold text-es-primary text-lg mb-2">${m.title}</h4>
+                    <p class="text-gray-700 leading-relaxed">${m.body}</p>
+                 </div>`
+            ).join('');
+
+            // Terms
+            document.getElementById('upsc-terms').innerHTML = upscData.terms.map(t => 
+                `<div class="bg-white p-4 rounded shadow-sm border border-gray-200">
+                    <h4 class="font-bold text-gray-900 mb-1">${t.term}</h4>
+                    <p class="text-sm text-gray-600">${t.def}</p>
+                 </div>`
+            ).join('');
+        }
+
+        function toggleUpscTab(tab) {
+            document.querySelectorAll('.upsc-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`upsc-${tab}`).classList.remove('hidden');
+
+            document.querySelectorAll('.upsc-tab').forEach(el => {
+                el.classList.remove('bg-es-primary', 'text-white');
+                el.classList.add('bg-white', 'text-es-primary');
+            });
+            const btn = document.querySelector(`button[onclick="toggleUpscTab('${tab}')"]`);
+            btn.classList.remove('bg-white', 'text-es-primary');
+            btn.classList.add('bg-es-primary', 'text-white');
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            menu.classList.toggle('hidden');
+            menu.classList.toggle('flex');
+        }
+
+        // === INITIALIZATION ===
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            renderSchemes();
+            renderUpsc();
+            
+            // Mobile Menu Trigger
+            document.getElementById('mobileMenuBtn').addEventListener('click', toggleMobileMenu);
+
+            // Filter GDP Chart Interaction
+            document.getElementById('gdpFilter').addEventListener('change', (e) => {
+                const val = e.target.value;
+                if(val === 'quarterly') {
+                    charts.gdp.data.labels = ['Q1 FY24', 'Q2 FY24', 'Q3 FY24', 'Q4 FY24(E)'];
+                    charts.gdp.data.datasets[0].data = [7.8, 7.6, 8.4, 5.9]; // Sample recent data
+                    charts.gdp.data.datasets[1].data = [7.8, 7.6, 8.4, 5.9]; 
+                } else {
+                    charts.gdp.data.labels = ['FY19', 'FY20', 'FY21', 'FY22', 'FY23', 'FY24(E)'];
+                    charts.gdp.data.datasets[0].data = [6.5, 3.7, -6.6, 8.7, 7.2, 7.3];
+                    charts.gdp.data.datasets[1].data = [6.5, 3.7, -6.6, 8.7, 7.2, 7.3];
+                }
+                charts.gdp.update();
+            });
+        });
+
+    </script>
+</body>
+</html>
